@@ -1,8 +1,15 @@
 <?php
+session_start();
 require_once 'conexao.php';
 
-// Simula que a Vendedora A (ID 2) está logada no sistema
-$usuarioLogadoId = 2; 
+// Bloqueia quem não está logado ou não é vendedora
+if (!isset($_SESSION['usuario_id']) || $_SESSION['perfil'] != 'vendedora') {
+    header("Location: login.php");
+    exit;
+}
+
+$usuarioLogadoId = $_SESSION['usuario_id'];
+$empresaId = $_SESSION['empresa_id'];
 
 // Busca o nome da vendedora logada
 $stmtUsuario = $pdo->prepare("SELECT nome FROM usuarios WHERE id = ?");
@@ -10,14 +17,14 @@ $stmtUsuario->execute([$usuarioLogadoId]);
 $vendedora = $stmtUsuario->fetch(PDO::FETCH_ASSOC);
 
 // Busca os contatos que caíram na roleta para esta vendedora
-$stmtContatos = $pdo->prepare("SELECT * FROM contatos WHERE usuario_id = ? ORDER BY ultimo_atendimento DESC");
-$stmtContatos->execute([$usuarioLogadoId]);
+$stmtContatos = $pdo->prepare("SELECT * FROM contatos WHERE usuario_id = ? AND empresa_id = ? ORDER BY ultimo_atendimento DESC");
+$stmtContatos->execute([$usuarioLogadoId, $empresaId]);
 $contatos = $stmtContatos->fetchAll(PDO::FETCH_ASSOC);
 
 $contatoAtivoId = isset($_GET['chat']) ? $_GET['chat'] : null;
 $contatoAtivoNome = 'Selecione uma conversa';
 $mensagens = [];
-$ultimoIdMensagem = 0; // Prepara a variável do último ID
+$ultimoIdMensagem = 0;
 
 if ($contatoAtivoId) {
     // Busca os detalhes do contato clicado
@@ -28,12 +35,11 @@ if ($contatoAtivoId) {
     if ($contatoAtivo) {
         $contatoAtivoNome = $contatoAtivo['nome'];
         
-        // Busca o histórico de mensagens dessa conversa
+        // Busca o histórico de mensagens dessa conversa ordenado pelo ID
         $stmtMensagens = $pdo->prepare("SELECT * FROM mensagens WHERE contato_id = ? ORDER BY id ASC");
         $stmtMensagens->execute([$contatoAtivoId]);
         $mensagens = $stmtMensagens->fetchAll(PDO::FETCH_ASSOC);
         
-        // Pega o ID da última mensagem que carregou na tela para passar pro radar
         if (count($mensagens) > 0) {
             $ultimoIdMensagem = end($mensagens)['id'];
         }
@@ -52,11 +58,10 @@ if ($contatoAtivoId) {
 </head>
 <body class="bg-gray-100 h-screen flex overflow-hidden">
 
-    <!-- BARRA LATERAL -->
     <aside class="w-full md:w-1/3 bg-white border-r border-gray-300 flex flex-col h-full">
         <div class="bg-gray-200 p-4 flex justify-between items-center border-b">
             <div class="font-bold text-gray-700"><?php echo htmlspecialchars($vendedora['nome']); ?></div>
-            <button class="text-sm bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">Sair</button>
+            <a href="logout.php" class="text-sm bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">Sair</a>
         </div>
         
         <div class="flex-1 overflow-y-auto">
@@ -78,22 +83,27 @@ if ($contatoAtivoId) {
         </div>
     </aside>
 
-    <!-- ÁREA DO CHAT -->
     <main class="<?php echo $contatoAtivoId ? 'flex' : 'hidden md:flex'; ?> w-full md:w-2/3 bg-[#efeae2] flex-col h-full relative">
         
         <?php if ($contatoAtivoId): ?>
-            <!-- Cabeçalho -->
             <div class="bg-gray-200 p-4 flex items-center border-b border-gray-300 shadow-sm z-10">
                 <a href="index.php" class="md:hidden mr-4 text-gray-600 hover:text-gray-800">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                 </a>
+                
                 <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
                     <?php echo strtoupper(substr($contatoAtivoNome, 0, 1)); ?>
                 </div>
-                <h2 class="ml-4 font-semibold text-gray-800"><?php echo htmlspecialchars($contatoAtivoNome); ?></h2>
+                
+                <!-- Nome do contato com o botão de edição -->
+                <div class="flex items-center">
+                    <h2 class="ml-4 font-semibold text-gray-800" id="nome-contato-header"><?php echo htmlspecialchars($contatoAtivoNome); ?></h2>
+                    <button onclick="editarNomeContato()" class="ml-2 text-gray-400 hover:text-gray-700 transition-colors" title="Editar nome">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                    </button>
+                </div>
             </div>
 
-            <!-- Mensagens -->
             <div class="flex-1 overflow-y-auto p-4 space-y-4" id="chat-container">
                 <?php foreach ($mensagens as $msg): ?>
                     <?php if ($msg['remetente'] == 'cliente'): ?>
@@ -112,13 +122,8 @@ if ($contatoAtivoId) {
                         </div>
                     <?php endif; ?>
                 <?php endforeach; ?>
-                
-                <?php if (count($mensagens) === 0): ?>
-                    <div class="text-center text-gray-500 text-sm mt-10 bg-white/50 p-2 rounded inline-block mx-auto">Nenhuma mensagem ainda.</div>
-                <?php endif; ?>
             </div>
 
-            <!-- Campo de Digitação -->
             <div class="bg-gray-200 p-4 flex items-center">
                 <input type="hidden" id="contato_id" value="<?php echo $contatoAtivoId; ?>">
                 <input type="text" id="mensagem_input" placeholder="Digite uma mensagem..." class="flex-1 p-3 rounded-full border-none focus:ring-2 focus:ring-green-400 outline-none shadow-sm" onkeypress="if(event.key === 'Enter') enviarMensagem()">
@@ -139,24 +144,19 @@ if ($contatoAtivoId) {
     </main>
 
     <script>
-    // Inicia a variável com o ID da última mensagem carregada no PHP
     let ultimoIdMensagem = <?php echo $ultimoIdMensagem; ?>;
 
-    // Rola o chat para o final logo que a página carrega
     window.onload = function() {
         const chatContainer = document.getElementById('chat-container');
         if(chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
     }
 
-    // Envia a mensagem para o banco
     function enviarMensagem() {
         const input = document.getElementById('mensagem_input');
         const conteudo = input.value.trim();
         const contatoId = document.getElementById('contato_id')?.value;
 
         if (conteudo === '' || !contatoId) return; 
-
-        // Limpa o input para o usuário já digitar a próxima
         input.value = '';
 
         fetch('enviar_mensagem.php', {
@@ -167,12 +167,36 @@ if ($contatoAtivoId) {
         .then(response => response.json())
         .then(data => {
             if (!data.sucesso) alert('Erro ao enviar mensagem.');
-            // Após enviar, o radar (setInterval) abaixo vai puxar a mensagem do banco e exibir na tela
         })
         .catch(error => console.error('Erro:', error));
     }
+    
+    // Nova função para editar o nome
+    function editarNomeContato() {
+        const contatoId = document.getElementById('contato_id')?.value;
+        if (!contatoId) return;
 
-    // O "Radar": Roda a cada 2 segundos para buscar novas mensagens (do cliente ou as que você acabou de enviar)
+        const nomeAtual = document.getElementById('nome-contato-header').innerText;
+        const novoNome = prompt("Digite o nome do cliente:", nomeAtual);
+
+        if (novoNome && novoNome.trim() !== "" && novoNome !== nomeAtual) {
+            fetch('editar_nome.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contato_id: contatoId, novo_nome: novoNome })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.sucesso) {
+                    window.location.reload();
+                } else {
+                    alert('Erro ao atualizar o nome.');
+                }
+            })
+            .catch(error => console.error('Erro:', error));
+        }
+    }
+
     setInterval(() => {
         const contatoId = document.getElementById('contato_id')?.value;
         if (!contatoId) return; 
@@ -207,7 +231,7 @@ if ($contatoAtivoId) {
                     }
                     
                     chatContainer.insertAdjacentHTML('beforeend', balaoHTML);
-                    ultimoIdMensagem = msg.id; // Atualiza o ID
+                    ultimoIdMensagem = msg.id;
                 });
                 
                 chatContainer.scrollTop = chatContainer.scrollHeight;
