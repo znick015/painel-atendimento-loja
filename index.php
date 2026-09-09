@@ -123,8 +123,9 @@ if ($contatoAtivoId) {
 
             <!-- Campo de Digitação -->
             <div class="bg-gray-200 p-4 flex items-center">
-                <input type="text" placeholder="Digite uma mensagem..." class="flex-1 p-3 rounded-full border-none focus:ring-2 focus:ring-green-400 outline-none shadow-sm">
-                <button class="ml-3 bg-green-500 text-white p-3 rounded-full hover:bg-green-600 shadow">
+                <input type="hidden" id="contato_id" value="<?php echo $contatoAtivoId; ?>">
+                <input type="text" id="mensagem_input" placeholder="Digite uma mensagem..." class="flex-1 p-3 rounded-full border-none focus:ring-2 focus:ring-green-400 outline-none shadow-sm" onkeypress="if(event.key === 'Enter') enviarMensagem()">
+                <button onclick="enviarMensagem()" class="ml-3 bg-green-500 text-white p-3 rounded-full hover:bg-green-600 shadow">
                     Enviar
                 </button>
             </div>
@@ -140,6 +141,61 @@ if ($contatoAtivoId) {
         <?php endif; ?>
 
     </main>
+<script>
+    function enviarMensagem() {
+        const input = document.getElementById('mensagem_input');
+        const conteudo = input.value.trim();
+        const contatoId = document.getElementById('contato_id').value;
 
+        if (conteudo === '') return; // Não envia mensagem vazia
+
+        // 1. Adiciona o balão na tela imediatamente para dar sensação de velocidade
+        const chatContainer = document.querySelector('.overflow-y-auto.p-4');
+        const horaAtual = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        
+        const balaoHTML = `
+            <div class="flex justify-end">
+                <div class="bg-[#d9fdd3] p-3 rounded-lg rounded-tr-none shadow max-w-md">
+                    <p class="text-gray-800">${conteudo.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>
+                    <span class="text-[10px] text-gray-500 block text-right mt-1">${horaAtual}</span>
+                </div>
+            </div>
+        `;
+        chatContainer.insertAdjacentHTML('beforeend', balaoHTML);
+        
+        // 2. Rola o chat para o final
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+        
+        // 3. Limpa o input
+        input.value = '';
+
+        // 4. Envia para o banco de dados via PHP
+        fetch('enviar_mensagem.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                contato_id: contatoId,
+                conteudo: conteudo
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.sucesso) {
+                alert('Erro ao enviar mensagem para o banco.');
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+        });
+    }
+
+    // Rola o chat para o final logo que a página carrega
+    window.onload = function() {
+        const chatContainer = document.querySelector('.overflow-y-auto.p-4');
+        if(chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+    </script>
 </body>
 </html>
