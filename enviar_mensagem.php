@@ -13,8 +13,8 @@ if (isset($dados['contato_id']) && !empty(trim($dados['conteudo']))) {
         $stmt = $pdo->prepare("INSERT INTO mensagens (contato_id, remetente, conteudo) VALUES (?, ?, ?)");
         $stmt->execute([$contato_id, $remetente, $conteudo]);
         
-        // Retorna sucesso para o JavaScript
-        echo json_encode(['sucesso' => true, 'hora' => date('H:i')]);
+        // Retorna sucesso
+        echo json_encode(['sucesso' => true]);
     } catch (PDOException $e) {
         echo json_encode(['sucesso' => false, 'erro' => 'Erro no banco de dados']);
     }
