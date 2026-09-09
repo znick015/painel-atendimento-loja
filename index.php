@@ -29,7 +29,7 @@ if ($contatoAtivoId) {
         $contatoAtivoNome = $contatoAtivo['nome'];
         
         // Busca o histórico de mensagens dessa conversa
-        $stmtMensagens = $pdo->prepare("SELECT * FROM mensagens WHERE contato_id = ? ORDER BY timestamp_envio ASC");
+        $stmtMensagens = $pdo->prepare("SELECT * FROM mensagens WHERE contato_id = ? ORDER BY id ASC");
         $stmtMensagens->execute([$contatoAtivoId]);
         $mensagens = $stmtMensagens->fetchAll(PDO::FETCH_ASSOC);
         
