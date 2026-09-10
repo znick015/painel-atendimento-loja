@@ -1,6 +1,6 @@
 <?php
 // Configurações da Evolution API
-$apiUrl = "http://localhost:8080/instance/create";
+$apiUrl = "http://localhost:8081/instance/create";
 $apiKey = "vizinha_secreta_123"; // A mesma senha que colocamos no docker-compose.yml
 $nomeInstancia = "loja_vizinha";
 
